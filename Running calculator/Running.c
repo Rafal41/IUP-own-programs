@@ -7,6 +7,7 @@
 #include <iup.h>
 #include <iup_config.h>
 
+#define MAXSTACK 30
 /*****************************************************************#DEFINES*****************************************************************/
 /*RUNNING CALCS DEFINITIONS*/
 #define MINTOSEK 60.00                            // minute to seconds
@@ -18,8 +19,6 @@
 #define LIMITSECONDS 60                           // maximum time in seconds
 #define TEMPSIZETIME 3
 
-
-#define MAXSTACK 10
 /*GENERAL DEFINITIONS*/
 #define FILL  "30"                                // iupfill size 
 #define RESULTLBLSIZE "60"                        // size of cell in database
@@ -82,10 +81,10 @@
 #define HBOXMR(X,Y) hboxmr ## x ## y
 
 /*CONTROL COMMENTS DEFINISIONS*/                  // if you want to activate particular check instruction just uncomment the appropriate position
-#define ADRESSESSCHECK                         // print adressess
+// #define ADRESSESSCHECK                         // print adressess
 // #define DISTANCECHECK                      
-// #define OPENFILESTR
-#define DIRTYSTATUS
+#define OPENFILESTR
+// #define DIRTYSTATUS
 // #define DBLDBCHECK                             // Checking the db in case of doubles
 // #define TIMEINPUTCHECK                         // Checking the caller status - button or keybord 
 // #define STACKCONTENT                              // Checking the content of stacks
@@ -433,8 +432,6 @@ int main(int argc, char **argv)
 
 #ifdef ADRESSESSCHECK
 printf("main: dlg adress - %p, vbox adress - %p\n", dlg, vbox);
-unsigned int countrows = IupGetChildCount(vbox);
-printf("main: Vbox rows = %u\n", countrows);
 printf("main: btnadd adress - %p\n", btnadd);
 #endif
    /* parent for pre-defined dialogs in closed functions (IupMessage) */
@@ -502,10 +499,9 @@ printf("save_file: dirtysave = %d\n", dirty);
   if (dirty)                                                                          // there is a need to do two separate checks - one for dirty status and second for filename
     filename = NULL;
   else
-  {
-    strcpy(filename,IupConfigGetVariableStr(config, "MainDialog", "Filename"));
-    // filename = IupConfigGetVariableStr(config, "MainDialog", "Filename");             // get name from config 
-  }
+    filename = IupConfigGetVariableStr(config, "MainDialog", "Filename");             // get name from config 
+    
+
   if (filename == NULL)                                                               // open file dialog
   {
     filedlg = IupFileDlg();
@@ -539,9 +535,7 @@ printf("save_file: dlg adress - %p, vbox adress - %p\n", self, vboxmain);
     unsigned int firsthboxnr = DBHBOXOFFSETSTART;
     unsigned int latesthboxnr = vboxelcount - DBHBOXOFFSETEND;                        // calculating current position of new entry in database
     unsigned int rowlen = 0;                                                          // length of string which contains db entry (can be var. dependant of name and time)
-
-    printf("save_file: vboxelcount = %u, firsthboxnr = %u, latesthboxnr = %u\n", vboxelcount, firsthboxnr, latesthboxnr);
-
+    
     /*SAVING SCHEME*/
     char* info ="; [NAME]; [DISTANCE]; [BEST TIME];\n";                             // saving start strings
     char* info2 ="; [DATE]; [TIME]; [TIMEPERKM]; [SPEED];\n";                              
@@ -576,8 +570,7 @@ printf("save_file: dlg adress - %p, vbox adress - %p\n", self, vboxmain);
 
       Ihandle *hboxrow, *datemr,*timemr, *timeperkmmr, *speedmr;
       char *datemrval, *timemrval, *timeperkmmrval, *speedmrval;
-      printf("save_file: hboxcurrent = %p, moreres = %p\n", hboxcurrent, moreres);
-          getchar();
+      
 #ifdef ADRESSESSCHECK
 printf("save_file: countrows = %u\n",countrows);
 printf("save_file: moreres address = %p\n",moreres);
@@ -637,7 +630,7 @@ bool renumberpostitl(Item id, Ihandle * vbox)
   unsigned int hboxnumber = DBHBOXOFFSETSTART;      // position of first hbox with results in database
   bool flag = false;                                // inform whether the deleted entry was already met
   
-  for (unsigned int i = 1; i < MAXSTACK - AmountofPosition(&st) + 1; i++, hboxnumber++)
+  for (unsigned int i = 1; i < MAINSTACK - AmountofPosition(&st) + 1; i++, hboxnumber++)
   {
     hbox = IupGetChild(vbox,hboxnumber);
     positionbox = IupGetChild(hbox,POSITIONPOS);
@@ -755,6 +748,7 @@ int open_cb(Ihandle *self, int state)
     unsigned int count = 0;                                                            // flag ("0", "1", "2") describing particular containers while dividing one row of data 
     char marker;
     char skipline[SKIPLINESIZE];
+    bool titlespace = false;                                                           // flag used to recognize whether the whitespace is within the title or not
 
     dlgmain = IupGetDialog(self);                                                      // flag describing the origin of calling function, "0" means that there is a need of creation of new file for saving
     int dirty = IupGetInt(dlgmain, "DIRTYOPEN");
@@ -859,19 +853,34 @@ int open_cb(Ihandle *self, int state)
           k = 0; 
           l = 0;
           count = 0;
+          titlespace = false;
 
           for (unsigned int i = 0; i < strlen(row); i++)
           { 
               if (row[i] == ';')                                            // reading char after char
                 count++;
-              else if (row[i] == ' ')
-                continue; 
-              else if (count == 0)
+              else if (row[i] == ' ' && titlespace == false)
+              {
+                puts("tu 0");
+                continue;
+              }
+              else if (row[i] == ' ' && titlespace == true)
+              {
+                puts("tu 1");
                 titlestr[j++] = row[i];
+              }
+              else if (count == 0)
+              {
+                puts("tu 2");
+                titlestr[j++] = row[i];
+                titlespace = true;
+              }
               else if (count == 1)
                 distancestr[k++] = row[i];
               else if (count == 2)
                 timestr[l++] = row[i];
+
+              printf("row[%u] = %c, titlestr = %c \n", i, row[i], titlestr[j-1]);
           }
 
           titlestr[j] = '\0';
@@ -981,12 +990,11 @@ int exit_cb(Ihandle *self)
   {
     if (!label_check(self))
       return IUP_IGNORE;
-    printf("tu jestem\n");
+    
     if (!save_file(self))
       return IUP_IGNORE;
-    printf("tu jestem2\n");
   }
-  printf("tu jestem3\n");
+  
   Ihandle* config = (Ihandle*)IupGetAttribute(self, "CONFIG");    // saves config
   IupConfigSave(config);
   IupDestroy(config);
@@ -1119,7 +1127,7 @@ puts("item_createnew_cb");
   IupSetAttribute(POSITION(n), "SIZE", RESULTLBLSIZE);
   IupSetAttribute(POSITION(n), "ALIGNMENT", RESULTLBLALIGN);
   IupSetStrf(POSITION(n), "NAME", "POSITION%u", n);
-  IupSetStrf(POSITION(n), "TITLE", "%u", MAXSTACK - AmountofPosition(&st));
+  IupSetStrf(POSITION(n), "TITLE", "%u", MAINSTACK - AmountofPosition(&st));
 
   TITLE(n) = IupText(NULL);
   IupSetAttribute(TITLE(n), "SIZE", RESULTLBLSIZE);
@@ -1348,9 +1356,13 @@ int confirm_newentry_cb(Ihandle* self)
   else
   {
     item_createnew_cb(dlgmain);                                   // adding new item into the database - only now
+
     Ihandle* hboxcurrent = IupGetChild(vboxmain,latesthboxnr);    // getting appropriate hbox from vbox
     Ihandle* length = IupGetChild(hboxcurrent,LENGTHPOS);         // getting appropriate containers from hbox
     Ihandle* title = IupGetChild(hboxcurrent,TITLEPOS); 
+    Ihandle* moreresdb = IupGetChild(hboxcurrent,MORERESPOS);
+
+    moreresults_cb(moreresdb);                                        // it is necessary to create the dialog with more results here
     
     IupSetAttribute(length, "VALUE", dist);                       // setting values in selected containers of main dialog
     IupSetAttribute(title, "VALUE", nm);
